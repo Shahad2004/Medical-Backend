@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: medical-backend
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node server.js  # عدل هذا لو ملف التشغيل عندك اسمه مختلف (مثلاً app.js)
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: medical-db
+          property: connectionString
+
+databases:
+  - name: medical-db
+    plan: free
