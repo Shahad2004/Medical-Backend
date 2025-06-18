@@ -1,78 +1,57 @@
-import express from "express";
-import db from "../db.js";
-import bcrypt from "bcrypt";
-
+const express = require('express');
+const db = require('../db');
 const router = express.Router();
 
-// Signup route
-router.post("/signup", async (req, res) => {
+// Sign Up
+router.post('/signup', async (req, res) => {
+  console.log('Signup route called', req.body); // Debug log
+  const { email, password, role } = req.body;
+  // توليد قيم افتراضية
+  const username = email.split('@')[0];
+  const full_name = email.split('@')[0];
+  
+  console.log('Generated values:', { username, full_name, email, role }); // Debug log
+  
   try {
-    const { email, password, name, role } = req.body;
+    console.log('Checking if user exists...'); // Debug log
+    const exists = await db.query('SELECT * FROM users WHERE email = $1', [email]);
+    console.log('User exists check result:', exists.rows.length); // Debug log
+    
+    if (exists.rows.length > 0) return res.status(400).json({ message: 'User already exists' });
 
-    // Validate role
-    if (!['doctor', 'patient'].includes(role)) {
-      return res.status(400).json({ message: "Invalid role. Must be either 'doctor' or 'patient'" });
-    }
-
-    // Check if user already exists
-    const exists = await db.query("SELECT * FROM users WHERE email = $1", [email]);
-    if (exists.rows.length > 0) {
-      return res.status(400).json({ message: "User already exists" });
-    }
-
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    // Insert new user
+    console.log('Inserting new user...'); // Debug log
     const result = await db.query(
-      "INSERT INTO users (email, password, name, role) VALUES ($1, $2, $3, $4) RETURNING id, email, name, role",
-      [email, hashedPassword, name, role]
+      'INSERT INTO users (username, password, full_name, email, role) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+      [username, password, full_name, email, role]
     );
-
-    res.status(201).json({ 
-      message: "User created successfully",
-      user: result.rows[0]
+    console.log('User inserted successfully:', result.rows[0]); // Debug log
+    res.status(201).json({ user: result.rows[0] });
+  } catch (err) {
+    console.error('Signup error details:', {
+      message: err.message,
+      code: err.code,
+      detail: err.detail,
+      hint: err.hint,
+      where: err.where
     });
-  } catch (error) {
-    console.error("Signup error:", error);
-    res.status(500).json({ message: "Internal server error" });
+    res.status(500).json({ message: 'Sign up failed', error: err.message });
   }
 });
 
-// Login route
-router.post("/login", async (req, res) => {
+// Log In
+router.post('/login', async (req, res) => {
+  console.log('Login route called', req.body); // Debug log
+  const { email, password } = req.body;
   try {
-    const { email, password } = req.body;
-
-    // Find user
     const result = await db.query(
-      "SELECT * FROM users WHERE email = $1",
-      [email]
+      'SELECT * FROM users WHERE email = $1 AND password = $2',
+      [email, password]
     );
-
-    if (result.rows.length === 0) {
-      return res.status(401).json({ message: "Invalid credentials" });
-    }
-
-    const user = result.rows[0];
-
-    // Verify password
-    const validPassword = await bcrypt.compare(password, user.password);
-    if (!validPassword) {
-      return res.status(401).json({ message: "Invalid credentials" });
-    }
-
-    // Remove password from response
-    const { password: _, ...userWithoutPassword } = user;
-
-    res.json({ 
-      message: "Login successful",
-      user: userWithoutPassword
-    });
-  } catch (error) {
-    console.error("Login error:", error);
-    res.status(500).json({ message: "Internal server error" });
+    if (result.rows.length === 0) return res.status(401).json({ message: 'Invalid credentials' });
+    res.json({ user: result.rows[0] });
+  } catch (err) {
+    res.status(500).json({ message: 'Login failed', error: err.message });
   }
 });
 
-export default router; 
+module.exports = router; 
